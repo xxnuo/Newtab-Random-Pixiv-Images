@@ -1,6 +1,6 @@
 # Newtab Random Pixiv Images
 
-Randomly picks one image from pixiv search results to replace newtab background. By default search uses "10000users 入り" keyword.
+Randomly picks one image from pixiv search results to replace newtab background. By default search uses "10000users 入り" keyword. You need to login Pixiv first to make search functionality work.
 
 ## Install
 
