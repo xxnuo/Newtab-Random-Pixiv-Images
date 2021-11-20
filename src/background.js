@@ -317,46 +317,51 @@
 
     async generateRandomIllustInfo() {
       ++this.running;
-      let randomPage = getRandomInt(0, this.totalPage) + 1;
-      if (!this.illustInfoPages[randomPage]) {
-        let pageObj = await this.searchIllustPage(randomPage);
-        let total = pageObj.body.illust.total;
-        let tp = Math.ceil(total / this.itemsPerPage);
-        if (tp > this.totalPage) {
-          this.totalPage = tp;
+      try {
+        let randomPage = getRandomInt(0, this.totalPage) + 1;
+        if (!this.illustInfoPages[randomPage]) {
+          let pageObj = await this.searchIllustPage(randomPage);
+          let total = pageObj.body.illust.total;
+          let tp = Math.ceil(total / this.itemsPerPage);
+          if (tp > this.totalPage) {
+            this.totalPage = tp;
+          }
+          // this.illustInfoPages[randomPage] = pageObj.body.illust.data.filter(
+          //   (el) => el.sl < 3
+          // );
+          this.illustInfoPages[randomPage] = pageObj.body.illust.data;
         }
-        // this.illustInfoPages[randomPage] = pageObj.body.illust.data.filter(
-        //   (el) => el.sl < 3
-        // );
-        this.illustInfoPages[randomPage] = pageObj.body.illust.data;
+        let illustArray = this.illustInfoPages[randomPage];
+
+        let randomIndex = getRandomInt(0, illustArray.length);
+        let illustInfo = illustArray[randomIndex];
+
+        let illustId = illustInfo.id;
+        let imgUrl = this.convertImageUrl(illustInfo.url);
+        let userName = illustInfo.userName;
+        let userId = illustInfo.userId;
+        let illustTitle = illustInfo.title;
+        let userProfileUrl = illustInfo.profileImageUrl;
+        let imgBlob = await this.fetchImage(imgUrl);
+        let objectURL = URL.createObjectURL(imgBlob);
+        let userProfileBlob = await this.fetchImage(userProfileUrl);
+        let upURL = URL.createObjectURL(userProfileBlob);
+        let result = {
+          userName: userName,
+          userId: `${userId}`,
+          illustId: `${illustId}`,
+          userIdUrl: `${this.baseUrl}/users/${userId}`,
+          illustIdUrl: `${this.baseUrl}/artworks/${illustId}`,
+          title: illustTitle,
+          profileImageUrl: upURL,
+          imageObjectUrl: objectURL,
+        };
+        this.illustInfoPool.put(result);
+      } catch (e) {
+        throw e;
+      } finally {
+        --this.running;
       }
-      let illustArray = this.illustInfoPages[randomPage];
-
-      let randomIndex = getRandomInt(0, illustArray.length);
-      let illustInfo = illustArray[randomIndex];
-
-      let illustId = illustInfo.id;
-      let imgUrl = this.convertImageUrl(illustInfo.url);
-      let userName = illustInfo.userName;
-      let userId = illustInfo.userId;
-      let illustTitle = illustInfo.title;
-      let userProfileUrl = illustInfo.profileImageUrl;
-      let imgBlob = await this.fetchImage(imgUrl);
-      let objectURL = URL.createObjectURL(imgBlob);
-      let userProfileBlob = await this.fetchImage(userProfileUrl);
-      let upURL = URL.createObjectURL(userProfileBlob);
-      let result = {
-        userName: userName,
-        userId: `${userId}`,
-        illustId: `${illustId}`,
-        userIdUrl: `${this.baseUrl}/users/${userId}`,
-        illustIdUrl: `${this.baseUrl}/artworks/${illustId}`,
-        title: illustTitle,
-        profileImageUrl: upURL,
-        imageObjectUrl: objectURL,
-      };
-      this.illustInfoPool.put(result);
-      --this.running;
     }
 
     async getOneIllustInfo() {
