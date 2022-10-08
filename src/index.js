@@ -90,6 +90,7 @@
   }
 
   async function changeElement(illustObject) {
+    if (!illustObject) { return; }
     for (let k in binding.ref) {
       for (let o of binding.ref[k]) {
         o(illustObject[k]);

@@ -8,38 +8,105 @@
   class Queue {
     constructor(maxsize = 5) {
       this.maxsize = maxsize;
-      this.queue = [];
+      this.array = [];
     }
-
-    qsize() {
-      return this.queue.length;
-    }
-
     empty() {
-      return this.queue.length === 0;
+      return this.array.length === 0;
     }
-
     full() {
-      return this.queue.length === this.queue.maxsize;
+      return this.array.length === this.maxsize;
     }
-
-    get() {
-      return this.queue.shift();
+    size() {
+      return this.array.length;
     }
-
-    put(item) {
-      if (this.queue.length < this.maxsize) {
-        this.queue.push(item);
+    capacity() {
+      return this.maxsize;
+    }
+    pop() {
+      if (!this.empty()) {
+        return this.array.shift();
       }
+    }
+    push(item) {
+      if (!this.full()) {
+        this.array.push(item);
+        return true;
+      }
+      return false;
+    }
+  }
+  class illustSource extends Queue {
+    constructor(maxsize = 1) {
+      super(maxsize);
+      this.baseUrl = "https://www.pixiv.net";
+      this.illustInfoUrl = "/ajax/illust/";
+      this.maxRetries = 3;
+      this.running = 0;
+    }
+    async fetchJson(url) {
+      let res = await fetch(url);
+      if (!res || !res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      let jsonResult = await res.json();
+      if (jsonResult.error) {
+        throw new Error(`Response error! message: ${res.message}`);
+      }
+      return jsonResult;
+    }
+    async fetchImage(url) {
+      let res = await fetch(url);
+      if (!res || !res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      return URL.createObjectURL(await res.blob());
+    }
+  }
+  class DiscoverySource extends illustSource {
+    constructor(maxsize = 200) {
+      super(maxsize);
+      // this.url = "/ajax/discovery/artworks?mode=all&limit=100";
+      this.url = "/ajax/discovery/artworks?mode=all";
+    }
+    async getItem() {
+      let item = this.pop();
+      if (item === undefined) {
+        let jsonResult = await this.fetchJson(this.baseUrl + this.url);
+        let A = jsonResult.body.thumbnails.illust;
+        let tasks = [];
+        for (let i = 0; i < A.length; ++i) {
+          tasks.push(this.fetchJson(this.baseUrl + this.illustInfoUrl + A[i].id)
+            .then((illustInfo, reject) => {
+              if (illustInfo.body.bookmarkCount + illustInfo.body.likeCount < 10000) {
+                reject("too small bookmarks and likes");
+              } else {
+                this.push({
+                  userName: illustInfo.body.userName,
+                  userId: illustInfo.body.userId,
+                  illustId: illustInfo.body.illustId,
+                  userIdUrl: this.baseUrl + "/users/" + illustInfo.body.userId,
+                  illustIdUrl: this.baseUrl + "/artworks/" + illustInfo.body.illustId,
+                  title: illustInfo.body.title,
+                  profileImageUrl: A[i].profileImageUrl,
+                  imageObjectUrl: illustInfo.body.urls.regular,
+                });
+              }
+            })
+          );
+        }
+        await Promise.any(tasks);
+        item = this.pop();
+      }
+      return item;
     }
   }
 
-  class ImageController {
-    constructor() {
-      this.illustInfoPool = new Queue(3);
+  class SearchSource extends illustSource {
+    constructor(maxsize = 2) {
+      super(maxsize);
       this.illustInfoPages = {};
       // this.positiveTagArray = [
-      //   // "オリジナル",
+      //   "オリジナル",
       //   "女の子",
       //   // "漫画",
       //   "東方",
@@ -48,16 +115,16 @@
       //   // "創作",
       //   "艦これ",
       //   // "ポケモン",
-      //   "イラスト",
-      //   "艦隊これくしょん",
+      //   // "イラスト",
+      //   // "艦隊これくしょん",
       //   "初音ミク",
-      //   "VOCALOID",
+      //   // "VOCALOID",
       //   // "オリキャラ",
       //   // "らくがき",
       //   "少女",
       //   // "Fate/GrandOrder",
       //   "おっぱい",
-      //   // "FGO",
+      //   "FGO",
       //   // "アイドルマスターシンデレラガールズ",
       //   // "ケモノ",
       //   "水着",
@@ -66,96 +133,105 @@
       //   // "擬人化",
       //   // "なにこれかわいい",
       //   // "練習",
-      //   "百合",
-      //   "ラブライブ!",
+      //   // "百合",
+      //   // "ラブライブ!",
       //   "アイドルマスター",
       //   "バーチャルYouTuber",
       //   // "模写",
       //   // "fanart",
-      //   "魔法少女まどか☆マギカ",
+      //   // "魔法少女まどか☆マギカ",
       //   "巨乳",
       //   // "原創",
       //   // "うごイラ",
       //   // "girl",
-      //   "風景",
-      //   "ドット絵",
-      //   "ファンタジー",
+      //   // "風景",
+      //   // "ドット絵",
+      //   // "ファンタジー",
       //   // "版権",
       //   // "制服",
       //   // "ハロウィン",
       //   // "猫",
-      //   "背景",
+      //   // "背景",
       //   // "コピック",
       //   // "original",
       //   // "水彩",
       //   "ロリ",
       //   // "anime",
-      //   "セーラー服",
+      //   // "セーラー服",
       //   // "illustration",
       //   // "ホロライブ",
       //   // "艦これかわいい",
-      //   "けものフレンズ",
+      //   // "けものフレンズ",
       //   // "東方project",
       //   // "うちの子",
-      //   "VTuber",
+      //   // "VTuber",
       //   // "色鉛筆",
       //   "アズールレーン",
       //   // "鏡音リン",
       //   // "クリスマス",
       //   // "デジタル",
-      //   // "かわいい",
+      //   "かわいい",
       //   // "Original",
       //   // "動物",
       //   // "猫耳",
       //   // "モノクロ",
       //   // "チルノ",
-      //   "女子高生",
-      //   "アークナイツ",
+      //   // "女子高生",
+      //   // "アークナイツ",
       //   // "描いてもいいのよ",
-      //   "プリキュア",
+      //   // "プリキュア",
       //   // "3DCG",
       //   // "art",
       //   "原神",
-      //   "ツインテール",
+      //   // "ツインテール",
       //   // "ラブライブ!サンシャイン!!",
-      //   "明日方舟",
+      //   // "明日方舟",
       //   // "博麗霊夢",
       //   // "ウマ娘プリティーダービー",
-      //   "ガールズ&パンツァー",
+      //   // "ガールズ&パンツァー",
       //   // "霧雨魔理沙",
       //   "ウマ娘",
-      //   "少女前線",
-      //   // "ふつくしい",
-      //   "魅惑のふともも",
+      //   // "少女前線",
+      //   "ふつくしい",
+      //   // "魅惑のふともも",
       //   // "ドールズフロントライン",
-      //   // "魅惑の谷間",
-      //   "ガンダム",
+      //   "魅惑の谷間",
+      //   // "ガンダム",
       //   // "ブラックマジシャンガール",
-      //   "スク水",
+      //   // "スク水",
       //   // "フランドール・スカーレット",
-      //   // "パンツ",
-      //   "グランブルーファンタジー",
+      //   // "グランブルーファンタジー",
       //   "バニーガール",
-      //   // "黒タイツ",
-      //   "尻神様",
-      //   // "極上の乳",
+      //   "黒タイツ",
+      //   // "尻神様",
+      //   "極上の乳",
       //   "おへそ",
-      //   "プリンセスコネクト!Re:Dive",
+      //   // "プリンセスコネクト!Re:Dive",
       //   // "仕事絵",
       //   // "エロマンガ先生",
+      //   // "ゼノブレイド",
+      //   // "パンチラ",
+      //   "メイド",
+      //   "可愛い",
+      //   "ビキニ",
+      //   "ふともも",
+      //   "ぱんつ",
+      //   // "パンツ",
+      //   // "下着",
+      //   "尻",
       // ];
       // this.negativeTagArray = [
-      //   "腐向け",
+      //   // "腐向け",
       //   "腐",
       //   // "ヘタリア",
       //   // "ケモノ",
       //   "刀剣乱舞",
       //   // "おそ松さん",
-      //   "女体化",
-      //   "男の子",
-      //   "ショタ",
-      //   "鬼滅の刃",
-      //   "僕のヒーローアカデミア",
+      //   // "女体化",
+      //   // "男の子",
+      //   // "ショタ",
+      //   // "鬼滅の刃",
+      //   // "僕のヒーローアカデミア",
       //   // "黒子のバスケ",
       //   // "銀魂",
       //   // "進撃の巨人",
@@ -165,22 +241,27 @@
       //   // "テニスの王子様",
       //   // "戦国BASARA",
       //   // "忍たま",
-      //   "twst夢",
-      //   "少年",
-      //   "美男子",
+      //   // "twst夢",
+      //   // "少年",
+      //   // "美男子",
       //   // "イナズマイレブン",
-      //   "デフォルメ",
+      //   // "デフォルメ",
       //   // "にじさんじ",
-      //   "描き方",
+      //   // "描き方",
       //   "講座",
-      //   "作画資料",
-      //   "創作",
-      //   "素材",
+      //   // "作画資料",
+      //   // "創作",
+      //   // "素材",
       //   "漫画",
-      //   "SideM",
+      //   // "SideM",
       //   "メイキング",
+      //   "BL",
       // ];
-      this.positiveTagArray = ["10000users入り"];
+      this.positiveTagArray = [
+        "10000users入り",
+        "30000users入り",
+        "50000users入り"
+      ];
       this.negativeTagArray = [
         "虚偽users入りタグ",
         "描き方",
@@ -194,19 +275,14 @@
         order: "date_d",
         mode: "safe",
         p: "1",
-        // blt: "10000",
+        // blt: "20000",
         s_mode: "s_tag",
         type: "illust",
       };
-      this.totalPage = 100;
+      this.totalPage = 300;
       this.itemsPerPage = 60;
-      this.baseUrl = "https://www.pixiv.net";
       this.searchUrl = "/ajax/search/illustrations/";
-      this.discoveryUrl = "/ajax/discovery/artworks?mode=safe&limit=100";
-      this.illustInfoUrl = "/ajax/illust/";
-      this.maxRetries = 3;
-      this.concurrencyLimit = 3;
-      this.running = 0;
+      this.illustInfoPages = {};
     }
 
     replaceSpecialCharacter = (function () {
@@ -227,187 +303,123 @@
       return fn;
     })();
 
-    convertImageUrl(url) {
-      let u = new URL(url);
-      let o = u.origin;
-      let i, p;
-      for (let s of ["/img-master", "/custom-thumb"]) {
-        i = u.pathname.indexOf(s);
-        if (i === -1) {
-          continue;
-        }
-        if (s === "/img-master") {
-          p = u.pathname.slice(i).replace("square", "master");
-          break;
-        }
-        if (s === "/custom-thumb") {
-          p =
-            "/img-master" +
-            u.pathname.slice(i + 13).replace("custom", "master");
-          break;
-        }
-      }
-      if (!p) {
-        return "";
-      } else {
-        return o + p;
-      }
-    }
-
     generateSearchUrl(p = 1) {
       let sp = this.searchParam;
-      let firstPart = "";
-      let secondPart = "";
       sp.p = p;
-
       let pWord = this.positiveTagArray.join(" OR ");
-      let nWord = " -" + this.negativeTagArray.join(" -");
-      let word = pWord + nWord;
-      firstPart = encodeURIComponent(word);
+      let nWord = "-" + this.negativeTagArray.join(" -");
+      let word = nWord + ' (' + pWord + ')';
+      let firstPart = encodeURIComponent(word);
       let secondPartArray = [];
       secondPartArray.push("?word=" + this.replaceSpecialCharacter(word));
       for (let o in sp) {
         secondPartArray.push(`${o}=${sp[o]}`);
       }
-      secondPart = secondPartArray.join("&");
-
+      let secondPart = secondPartArray.join("&");
       return firstPart + secondPart;
-    }
-
-    async fetchImage(url) {
-      let res = await fetch(url);
-
-      if (!res || !res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`);
-      }
-      return await res.blob();
-    }
-
-    async pixivAjaxFetch(url) {
-      let res = await fetch(url);
-
-      if (!res || !res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`);
-      }
-      let jsonResult = await res.json();
-      if (jsonResult.error) {
-        throw new Error(`Response error! message: ${res.message}`);
-      }
-      return jsonResult;
     }
 
     async searchIllustPage(p) {
       let paramUrl = this.generateSearchUrl(p);
       let url = new URL(this.searchUrl + paramUrl, this.baseUrl);
-      let jsonResult = await this.pixivAjaxFetch(url);
+      let jsonResult = await this.fetchJson(url);
       return jsonResult;
     }
 
-    async fetchIllustInfo(illustId) {
-      let url = new URL(this.illustInfoUrl + `${illustId}`, this.baseUrl);
-      let jsonResult = await this.pixivAjaxFetch(url);
-      return jsonResult;
-    }
-
-    async discoveryIllust() {
-      let url = new URL(this.discoveryUrl, this.baseUrl);
-      let jsonResult = await this.pixivAjaxFetch(url);
-      return jsonResult;
-    }
-
-    async generateRandomIllustInfo() {
-      ++this.running;
-      try {
-        let randomPage = getRandomInt(0, this.totalPage) + 1;
-        if (!this.illustInfoPages[randomPage]) {
-          let pageObj = await this.searchIllustPage(randomPage);
-          let total = pageObj.body.illust.total;
-          let tp = Math.ceil(total / this.itemsPerPage);
-          if (tp > this.totalPage) {
-            this.totalPage = tp;
-          }
-          // this.illustInfoPages[randomPage] = pageObj.body.illust.data.filter(
-          //   (el) => el.sl < 3
-          // );
-          this.illustInfoPages[randomPage] = pageObj.body.illust.data;
+    async getRandomIllust() {
+      let randomPage = getRandomInt(0, this.totalPage) + 1;
+      if (!this.illustInfoPages[randomPage]) {
+        let pageObj = await this.searchIllustPage(randomPage);
+        let total = pageObj.body.illust.total;
+        let tp = Math.ceil(total / this.itemsPerPage);
+        if (tp > this.totalPage) {
+          this.totalPage = tp;
         }
-        let illustArray = this.illustInfoPages[randomPage];
-
-        let randomIndex = getRandomInt(0, illustArray.length);
-        let illustInfo = illustArray[randomIndex];
-
-        let illustId = illustInfo.id;
-        let imgUrl = this.convertImageUrl(illustInfo.url);
-        let userName = illustInfo.userName;
-        let userId = illustInfo.userId;
-        let illustTitle = illustInfo.title;
-        let userProfileUrl = illustInfo.profileImageUrl;
-        let imgBlob = await this.fetchImage(imgUrl);
-        let objectURL = URL.createObjectURL(imgBlob);
-        let userProfileBlob = await this.fetchImage(userProfileUrl);
-        let upURL = URL.createObjectURL(userProfileBlob);
-        let result = {
-          userName: userName,
-          userId: `${userId}`,
-          illustId: `${illustId}`,
-          userIdUrl: `${this.baseUrl}/users/${userId}`,
-          illustIdUrl: `${this.baseUrl}/artworks/${illustId}`,
-          title: illustTitle,
-          profileImageUrl: upURL,
-          imageObjectUrl: objectURL,
-        };
-        this.illustInfoPool.put(result);
-      } catch (e) {
-        throw e;
-      } finally {
-        --this.running;
+        this.illustInfoPages[randomPage] = pageObj.body.illust.data;
       }
+      let illustArray = this.illustInfoPages[randomPage];
+      let randomIndex = getRandomInt(0, illustArray.length);
+      let res = {
+        illustId: illustArray[randomIndex].id,
+        profileImageUrl: illustArray[randomIndex].profileImageUrl
+      };
+      return res;
     }
 
-    async getOneIllustInfo() {
-      let rt = this.illustInfoPool.get();
-      while (!rt) {
-        {
-          try {
-            await this.fillIllustInfoPool();
-          } catch (error) {
-            await new Promise((resolve) => setTimeout(resolve, 500));
-          } finally {
-            rt = this.illustInfoPool.get();
-          }
-        }
+    async getItem() {
+      let item = this.pop();
+      if (item === undefined) {
+        await this.fill();
+        item = this.pop();
       }
-      return rt;
+      return item;
     }
 
-    async prefetchIllustInfo() {
-      if (
-        this.illustInfoPool.qsize() < Math.ceil(this.illustInfoPool.maxsize / 2)
-      ) {
-        try {
-          await this.fillIllustInfoPool();
-        } catch (error) {}
-      }
-    }
-
-    async fillIllustInfoPool() {
+    async fill() {
       let tasks = [];
-      let i = 0;
-      let pendings = this.running;
-      let availableSlots =
-        this.illustInfoPool.maxsize - this.illustInfoPool.qsize();
-      for (
-        ;
-        i < Math.min(this.concurrencyLimit, availableSlots - pendings);
-        ++i
-      ) {
-        tasks.push(this.generateRandomIllustInfo());
+      while (this.capacity() > this.size() + this.running) {
+        ++this.running;
+        tasks.push(new Promise((resolve) => {
+          resolve(this.getRandomIllust());
+        }).then((res) =>
+          this.fetchJson(this.baseUrl + this.illustInfoUrl + res.illustId)
+            .then((illustInfo) => {
+              res.userName = illustInfo.body.userName;
+              res.userId = illustInfo.body.userId;
+              res.illustId = illustInfo.body.illustId;
+              res.userIdUrl = this.baseUrl + "/users/" + illustInfo.body.userId;
+              res.illustIdUrl = this.baseUrl + "/artworks/" + illustInfo.body.illustId;
+              res.title = illustInfo.body.title;
+              res.imageObjectUrl = illustInfo.body.urls.regular;
+              this.push(res);
+            })
+        ).then(() => { --this.running; }));
+      }
+      await Promise.any(tasks);
+    }
+  }
+  class IllustFeeder extends illustSource {
+    constructor(maxsize = 1) {
+      super(maxsize);
+      this.sources = {
+        // discoverySource: new DiscoverySource(),
+        searchSource: new SearchSource()
+      }
+    }
+    async getItem() {
+      let item = this.pop();
+      if (item === undefined) {
+        await this.fill();
+        item = this.pop();
+      }
+      return item;
+    }
+    async fill() {
+      if (this.capacity() === this.running) {
+        return;
+      }
+      let ss = Object.values(this.sources);
+      let tasks = [];
+      while (this.capacity() > this.size() + this.running) {
+        ++this.running;
+        tasks.push(new Promise((resolve) =>
+          resolve(ss[getRandomInt(0, ss.length)].getItem())
+        ).then((item) =>
+          Promise.all([
+            this.fetchImage(item.imageObjectUrl)
+              .then((url) => { item.imageObjectUrl = url; }),
+            this.fetchImage(item.profileImageUrl)
+              .then((url) => { item.profileImageUrl = url; })
+          ]).then(() => item)
+        ).then((item) => {
+          this.push(item);
+        }).then(() => { --this.running; }));
       }
       return await Promise.any(tasks);
     }
   }
 
-  const imageController = new ImageController();
+  const illustFeeder = new IllustFeeder();
 
   chrome.webRequest.onBeforeSendHeaders.addListener(
     function (details) {
@@ -441,10 +453,13 @@
     sendResponse
   ) {
     if (message.action === "fetchImage") {
-      imageController.getOneIllustInfo().then((res) => {
-        sendResponse(res);
-        imageController.prefetchIllustInfo();
-      });
+      illustFeeder.getItem()
+        .then((res) => {
+          sendResponse(res);
+          console.log(res);
+        }).then(() => {
+          illustFeeder.fill();
+        });
     }
     return true;
   });
