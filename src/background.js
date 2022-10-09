@@ -456,7 +456,7 @@ chrome.runtime.onInstalled.addListener(() => {
     }
   }
   class IllustFeeder extends illustSource {
-    constructor(maxsize = 1) {
+    constructor(maxsize = 2) {
       super(maxsize);
       this.sources = {
         // discoverySource: new DiscoverySource(),
