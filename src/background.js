@@ -307,9 +307,7 @@ chrome.runtime.onInstalled.addListener(() => {
       //   "BL",
       // ];
       this.positiveTagArray = [
-        "3000users入り",
         "7500users入り",
-        "5000users入り",
         "10000users入り",
         "30000users入り",
         "50000users入り"
@@ -381,7 +379,7 @@ chrome.runtime.onInstalled.addListener(() => {
     }
 
     async getRandomIllust() {
-      let randomPage = getRandomInt(0, this.totalPage) + 1;
+      let randomPage = getRandomInt(0, Math.min(this.totalPage, 1000)) + 1;
       if (!this.illustInfoPages[randomPage]) {
         try {
           let pageObj = await this.searchIllustPage(randomPage);
