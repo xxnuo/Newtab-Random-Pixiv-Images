@@ -538,6 +538,7 @@ chrome.runtime.onInstalled.addListener(() => {
         }).then(() => {
           illustFeeder.fill();
         }).catch((e) => {
+          sendResponse(null);
           console.log(e);
         });
     }
