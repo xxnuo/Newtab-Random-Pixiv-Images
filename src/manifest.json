@@ -1,18 +1,18 @@
 {
   "name": "Newtab Random Pixiv Images",
-  "version": "0.1.0",
-  "manifest_version": 2,
+  "version": "0.2.0",
+  "manifest_version": 3,
   "chrome_url_overrides": {
     "newtab": "index.html"
   },
   "background": {
-    "scripts": ["background.js"],
-    "persistent": true
+    "service_worker": "background.js"
   },
   "permissions": [
-    "webRequest",
-    "webRequestBlocking",
-    "https://www.pixiv.net/*",
-    "https://i.pximg.net/*"
+    "declarativeNetRequestWithHostAccess"
+  ],
+  "host_permissions": [
+    "*://*.pixiv.net/*",
+    "*://*.pximg.net/*"
   ]
 }

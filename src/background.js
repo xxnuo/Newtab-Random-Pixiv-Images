@@ -1,10 +1,60 @@
+chrome.runtime.onInstalled.addListener(() => {
+  const RULE = [
+    {
+      "id": 1,
+      "priority": 1,
+      "action": {
+        "type": "modifyHeaders",
+        "requestHeaders": [
+          {
+            "header": "referer",
+            "operation": "set",
+            "value": "https://www.pixiv.net/"
+          }
+        ]
+      },
+      "condition": {
+        initiatorDomains: [chrome.runtime.id],
+        "urlFilter": "pixiv.net",
+        "resourceTypes": [
+          "xmlhttprequest",
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "priority": 1,
+      "action": {
+        "type": "modifyHeaders",
+        "requestHeaders": [
+          {
+            "header": "referer",
+            "operation": "set",
+            "value": "https://www.pixiv.net/"
+          }
+        ]
+      },
+      "condition": {
+        initiatorDomains: [chrome.runtime.id],
+        "urlFilter": "pximg.net",
+        "resourceTypes": [
+          "xmlhttprequest",
+        ]
+      }
+    }
+  ];
+  chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: RULE.map(o => o.id),
+    addRules: RULE,
+  });
+});
+
 (function () {
   function getRandomInt(min, max) {
     min = Math.ceil(min);
     max = Math.floor(max);
     return Math.floor(Math.random() * (max - min) + min);
   }
-
   class Queue {
     constructor(maxsize = 5) {
       this.maxsize = maxsize;
@@ -59,7 +109,7 @@
       if (!res || !res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
       }
-      return URL.createObjectURL(await res.blob());
+      return res.blob();
     }
   }
   class DiscoverySource extends illustSource {
@@ -348,9 +398,14 @@
 
     async getItem() {
       let item = this.pop();
-      if (item === undefined) {
-        await this.fill();
-        item = this.pop();
+      while (item === undefined) {
+        try {
+          await this.fill();
+        } catch (error) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        } finally {
+          item = this.pop();
+        }
       }
       return item;
     }
@@ -375,7 +430,7 @@
             })
         ).then(() => { --this.running; }));
       }
-      await Promise.any(tasks);
+      return Promise.any(tasks);
     }
   }
   class IllustFeeder extends illustSource {
@@ -388,16 +443,18 @@
     }
     async getItem() {
       let item = this.pop();
-      if (item === undefined) {
-        await this.fill();
-        item = this.pop();
+      while (item === undefined) {
+        try {
+          await this.fill();
+        } catch (error) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        } finally {
+          item = this.pop();
+        }
       }
       return item;
     }
     async fill() {
-      if (this.capacity() === this.running) {
-        return;
-      }
       let ss = Object.values(this.sources);
       let tasks = [];
       while (this.capacity() > this.size() + this.running) {
@@ -407,45 +464,37 @@
         ).then((item) =>
           Promise.all([
             this.fetchImage(item.imageObjectUrl)
-              .then((url) => { item.imageObjectUrl = url; }),
+              .then((blob) => {
+                return new Promise((resolve, reject) => {
+                  let reader = new FileReader();
+                  reader.onload = () => resolve(reader.result);
+                  reader.onerror = reject;
+                  reader.readAsDataURL(blob);
+                }).then((url) => {
+                  item.imageObjectUrl = url;
+                });
+              }),
             this.fetchImage(item.profileImageUrl)
-              .then((url) => { item.profileImageUrl = url; })
+              .then((blob) => {
+                return new Promise((resolve, reject) => {
+                  let reader = new FileReader();
+                  reader.onload = () => resolve(reader.result);
+                  reader.onerror = reject;
+                  reader.readAsDataURL(blob);
+                }).then((url) => {
+                  item.profileImageUrl = url;
+                });
+              })
           ]).then(() => item)
         ).then((item) => {
           this.push(item);
         }).then(() => { --this.running; }));
       }
-      return await Promise.any(tasks);
+      return Promise.any(tasks);
     }
   }
 
   const illustFeeder = new IllustFeeder();
-
-  chrome.webRequest.onBeforeSendHeaders.addListener(
-    function (details) {
-      let existed = false;
-      let refName = "Referer";
-      let refValue = "https://www.pixiv.net/";
-      for (var i = 0; i < details.requestHeaders.length; ++i) {
-        if (
-          details.requestHeaders[i].name.toLowerCase() === refName.toLowerCase()
-        ) {
-          details.requestHeaders[i].value = refValue;
-          existed = true;
-          break;
-        }
-      }
-      if (!existed) {
-        details.requestHeaders.push({
-          name: refName,
-          value: refValue,
-        });
-      }
-      return { requestHeaders: details.requestHeaders };
-    },
-    { urls: ["https://www.pixiv.net/*", "https://i.pximg.net/*"] },
-    ["blocking", "requestHeaders", "extraHeaders"]
-  );
 
   chrome.runtime.onMessage.addListener(function (
     message,
