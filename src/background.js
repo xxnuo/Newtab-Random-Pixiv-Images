@@ -90,26 +90,25 @@ chrome.runtime.onInstalled.addListener(() => {
       super(maxsize);
       this.baseUrl = "https://www.pixiv.net";
       this.illustInfoUrl = "/ajax/illust/";
-      this.maxRetries = 3;
+      this.maxRetries = 10;
       this.running = 0;
     }
     async fetchJson(url) {
-      let res = await fetch(url);
-      if (!res || !res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`);
-      }
-      let jsonResult = await res.json();
-      if (jsonResult.error) {
-        throw new Error(`Response error! message: ${res.message}`);
-      }
-      return jsonResult;
+      return fetch(url, { signal: AbortSignal.timeout(5000) })
+        .then((res) => res.json())
+        .then((res) => {
+          return new Promise((resolve, reject) => {
+            if (res.error === true) {
+              reject(res);
+            } else {
+              resolve(res);
+            }
+          });
+        });
     }
     async fetchImage(url) {
-      let res = await fetch(url);
-      if (!res || !res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`);
-      }
-      return res.blob();
+      return fetch(url, { signal: AbortSignal.timeout(5000) })
+        .then((res) => res.blob());
     }
   }
   class DiscoverySource extends illustSource {
@@ -308,6 +307,9 @@ chrome.runtime.onInstalled.addListener(() => {
       //   "BL",
       // ];
       this.positiveTagArray = [
+        "3000users入り",
+        "7500users入り",
+        "5000users入り",
         "10000users入り",
         "30000users入り",
         "50000users入り"
@@ -371,24 +373,33 @@ chrome.runtime.onInstalled.addListener(() => {
 
     async searchIllustPage(p) {
       let paramUrl = this.generateSearchUrl(p);
-      let url = new URL(this.searchUrl + paramUrl, this.baseUrl);
-      let jsonResult = await this.fetchJson(url);
+      let jsonResult = await this.fetchJson(this.baseUrl + this.searchUrl + paramUrl);
+      if (!jsonResult.body || !jsonResult.body.illust || !jsonResult.body.illust.data) {
+        throw new Error('empty search result');
+      }
       return jsonResult;
     }
 
     async getRandomIllust() {
       let randomPage = getRandomInt(0, this.totalPage) + 1;
       if (!this.illustInfoPages[randomPage]) {
-        let pageObj = await this.searchIllustPage(randomPage);
-        let total = pageObj.body.illust.total;
-        let tp = Math.ceil(total / this.itemsPerPage);
-        if (tp > this.totalPage) {
-          this.totalPage = tp;
+        try {
+          let pageObj = await this.searchIllustPage(randomPage);
+          let total = pageObj.body.illust.total;
+          let tp = Math.ceil(total / this.itemsPerPage);
+          if (tp > this.totalPage) {
+            this.totalPage = tp;
+          }
+          this.illustInfoPages[randomPage] = pageObj.body.illust.data;
+        } catch (e) {
+          throw new Error(e);
         }
-        this.illustInfoPages[randomPage] = pageObj.body.illust.data;
       }
       let illustArray = this.illustInfoPages[randomPage];
       let randomIndex = getRandomInt(0, illustArray.length);
+      if (!illustArray || !illustArray[randomIndex]) {
+        throw new Error('empty illustor info');
+      }
       let res = {
         illustId: illustArray[randomIndex].id,
         profileImageUrl: illustArray[randomIndex].profileImageUrl
@@ -398,11 +409,17 @@ chrome.runtime.onInstalled.addListener(() => {
 
     async getItem() {
       let item = this.pop();
+      let tries = 0;
       while (item === undefined) {
+        ++tries;
         try {
           await this.fill();
         } catch (error) {
-          await new Promise((resolve) => setTimeout(resolve, 500));
+          if (tries < this.maxRetries) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          } else {
+            throw new Error(error);
+          }
         } finally {
           item = this.pop();
         }
@@ -414,8 +431,14 @@ chrome.runtime.onInstalled.addListener(() => {
       let tasks = [];
       while (this.capacity() > this.size() + this.running) {
         ++this.running;
-        tasks.push(new Promise((resolve) => {
-          resolve(this.getRandomIllust());
+        tasks.push(new Promise((resolve, reject) => {
+          let res;
+          try {
+            res = this.getRandomIllust();
+            resolve(res);
+          } catch (e) {
+            reject(res);
+          }
         }).then((res) =>
           this.fetchJson(this.baseUrl + this.illustInfoUrl + res.illustId)
             .then((illustInfo) => {
@@ -428,7 +451,8 @@ chrome.runtime.onInstalled.addListener(() => {
               res.imageObjectUrl = illustInfo.body.urls.regular;
               this.push(res);
             })
-        ).then(() => { --this.running; }));
+        ).catch((e) => console.log(e))
+          .finally(() => { --this.running; }));
       }
       return Promise.any(tasks);
     }
@@ -443,11 +467,17 @@ chrome.runtime.onInstalled.addListener(() => {
     }
     async getItem() {
       let item = this.pop();
+      let tries = 0;
       while (item === undefined) {
+        ++tries;
         try {
           await this.fill();
         } catch (error) {
-          await new Promise((resolve) => setTimeout(resolve, 500));
+          if (tries < this.maxRetries) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          } else {
+            throw new Error(error);
+          }
         } finally {
           item = this.pop();
         }
@@ -488,7 +518,8 @@ chrome.runtime.onInstalled.addListener(() => {
           ]).then(() => item)
         ).then((item) => {
           this.push(item);
-        }).then(() => { --this.running; }));
+        }).catch((e) => { console.log(e) })
+          .finally(() => { --this.running; }));
       }
       return Promise.any(tasks);
     }
@@ -508,6 +539,8 @@ chrome.runtime.onInstalled.addListener(() => {
           console.log(res);
         }).then(() => {
           illustFeeder.fill();
+        }).catch((e) => {
+          console.log(e);
         });
     }
     return true;
