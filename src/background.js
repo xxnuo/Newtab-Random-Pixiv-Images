@@ -388,6 +388,10 @@ chrome.runtime.onInstalled.addListener(() => {
           if (tp > this.totalPage) {
             this.totalPage = tp;
           }
+          // filter sensitive images
+          // pageObj.body.illust.data = pageObj.body.illust.data.filter(
+          //   (el) => el.sl < 3
+          // );
           this.illustInfoPages[randomPage] = pageObj.body.illust.data;
         } catch (e) {
           throw new Error(e);
