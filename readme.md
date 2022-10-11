@@ -14,7 +14,7 @@ Randomly picks one image from pixiv search results to replace newtab background.
 1. Clone or download this project to local.
 2. Open firefox and goto "about:debugging" page.
 3. Select "This Firefox" tab on the left side.
-4. Click "Load Temporary Add-on..." button, then in the open window goto the "src_firefox" directory, selcet "manifest.json" file.
+4. Click "Load Temporary Add-on..." button, then in the open window goto the "src_firefox" directory, select "manifest.json" file.
 5. Open newtab and enjoy a randomly picked pixiv illustration!
 
 ##### Note: The image transition effect in firefox will not work like chrome.
